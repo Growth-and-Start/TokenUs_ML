@@ -6,10 +6,21 @@ from PIL import Image
 import numpy as np
 from scipy.spatial.distance import cosine
 
+import boto3
+from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET_NAME
+
+import requests
+
 import os
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Flask 영상 유사도 검사 프로젝트 시작!"
+
+#-----파일 업로드-------
 
 # 업로드된 파일을 저장할 폴더 설정
 UPLOAD_FOLDER = 'uploads'
@@ -27,7 +38,71 @@ os.makedirs(FRAMES_FOLDER, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-#----벡터 추출 및 유사도 검사
+# 로컬 업로드 엔드포인트()
+# @app.route('/upload', methods=['POST'])
+# def upload_file():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No file part'}), 400
+
+#     file = request.files['file']
+#     if file.filename == '':
+#         return jsonify({'error': 'No selected file'}), 400
+
+#     if file and allowed_file(file.filename):
+#         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+#         file.save(filepath)
+#         return jsonify({'message': 'File uploaded successfully', 'filename': file.filename}), 200
+
+#     return jsonify({'error': 'Invalid file format'}), 400
+
+
+# ----------프레임 추출-------------
+# 프레임 추출 함수
+def extract_frames(video_path, output_folder, frame_interval=30):
+    """
+    동영상에서 일정 간격으로 프레임을 추출하는 함수
+    - video_path: 동영상 파일 경로
+    - output_folder: 프레임 저장 폴더
+    - frame_interval: N프레임마다 한 개의 프레임 저장 (기본값: 30)
+    """
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    frame_output_path = os.path.join(output_folder, video_name)
+    os.makedirs(frame_output_path, exist_ok=True)
+
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+    extracted_count = 0
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_count % frame_interval == 0:
+            frame_filename = os.path.join(frame_output_path, f"frame_{extracted_count}.jpg")
+            cv2.imwrite(frame_filename, frame)
+            extracted_count += 1
+
+        frame_count += 1
+
+    cap.release()
+    return extracted_count  # 추출된 프레임 개수 반환
+
+@app.route('/extract_frames', methods=['POST'])
+def extract_video_frames():
+    if 'filename' not in request.json:
+        return jsonify({'error': 'Filename is required'}), 400
+
+    filename = request.json['filename']
+    video_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+    if not os.path.exists(video_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    extracted_count = extract_frames(video_path, app.config['FRAMES_FOLDER'])
+    return jsonify({'message': 'Frames extracted successfully', 'frames_extracted': extracted_count}), 200
+
+#------------벡터 추출 및 유사도 검사---------------
 # 사전 학습된 모델 로드 (ResNet-50 사용)
 model = models.resnet50(pretrained=True)
 model.eval()  # 평가 모드로 설정
@@ -92,14 +167,30 @@ def compare_videos():
     return jsonify({
         "average_feature_similarity": float(avg_similarity)
     }), 200
+    
+    
+#--------S3 업로드 기능-----------
 
-@app.route('/')
-def home():
-    return "Flask 영상 유사도 검사 프로젝트 시작!"
+# AWS S3 클라이언트 설정
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_REGION
+)
 
-# 업로드 엔드포인트
+def upload_to_s3(file_path, s3_key):
+    """ S3에 파일 업로드 """
+    try:
+        s3_client.upload_file(file_path, AWS_S3_BUCKET_NAME, s3_key)
+        return f"https://{AWS_S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+    except Exception as e:
+        print(f"S3 업로드 오류: {e}")
+        return None
+    
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """파일을 업로드하고 S3에 저장"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -107,58 +198,79 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    if file and allowed_file(file.filename):
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(filepath)
-        return jsonify({'message': 'File uploaded successfully', 'filename': file.filename}), 200
+    local_file_path = os.path.join("uploads", file.filename)
+    file.save(local_file_path)
 
-    return jsonify({'error': 'Invalid file format'}), 400
+    # S3에 업로드
+    s3_url = upload_to_s3(local_file_path, f"videos/{file.filename}")
 
-# 프레임 추출 함수
-def extract_frames(video_path, output_folder, frame_interval=30):
-    """
-    동영상에서 일정 간격으로 프레임을 추출하는 함수
-    - video_path: 동영상 파일 경로
-    - output_folder: 프레임 저장 폴더
-    - frame_interval: N프레임마다 한 개의 프레임 저장 (기본값: 30)
-    """
-    video_name = os.path.splitext(os.path.basename(video_path))[0]
-    frame_output_path = os.path.join(output_folder, video_name)
-    os.makedirs(frame_output_path, exist_ok=True)
+    if not s3_url:
+        return jsonify({'error': 'Failed to upload to S3'}), 500
 
-    cap = cv2.VideoCapture(video_path)
-    frame_count = 0
-    extracted_count = 0
+    return jsonify({'message': 'File uploaded successfully', 's3_url': s3_url}), 200
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
 
-        if frame_count % frame_interval == 0:
-            frame_filename = os.path.join(frame_output_path, f"frame_{extracted_count}.jpg")
-            cv2.imwrite(frame_filename, frame)
-            extracted_count += 1
+#--------check similarity-----
 
-        frame_count += 1
 
-    cap.release()
-    return extracted_count  # 추출된 프레임 개수 반환
 
-@app.route('/extract_frames', methods=['POST'])
-def extract_video_frames():
-    if 'filename' not in request.json:
-        return jsonify({'error': 'Filename is required'}), 400
+# @app.route('/check_similarity', methods=['POST'])
+# def check_similarity_and_upload():
+#     """ 새로 업로드된 영상과 기존 모든 영상의 유사도를 비교한 후, 너무 유사하지 않으면 S3에 저장 """
+#     data = request.json
+#     if 'filename' not in data:
+#         return jsonify({'error': 'Filename is required'}), 400
 
-    filename = request.json['filename']
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+#     new_video = data['filename']
+#     new_video_path = os.path.join(app.config['UPLOAD_FOLDER'], new_video)
 
-    if not os.path.exists(video_path):
-        return jsonify({'error': 'File not found'}), 404
+#     if not os.path.exists(new_video_path):
+#         return jsonify({'error': 'File not found'}), 404
 
-    extracted_count = extract_frames(video_path, app.config['FRAMES_FOLDER'])
-    return jsonify({'message': 'Frames extracted successfully', 'frames_extracted': extracted_count}), 200
+#     # 기존 업로드된 영상 목록 가져오기 (Spring Boot에서 조회)
+#     existing_videos = get_existing_videos()
 
+#     if not existing_videos:
+#         # 기존 영상이 없으면 바로 S3에 업로드
+#         s3_url = upload_to_s3(new_video_path, f"videos/{new_video}")
+#         return jsonify({'message': 'File uploaded successfully', 's3_url': s3_url}), 200
+
+#     # 새 영상 프레임 벡터 추출
+#     new_vectors = extract_video_vectors(new_video_path)
+
+#     # 기존 영상과 비교
+#     similarities = []
+#     for existing_video in existing_videos:
+#         existing_video_path = os.path.join(app.config['FRAMES_FOLDER'], existing_video)
+
+#         if not os.path.exists(existing_video_path):
+#             continue
+
+#         existing_vectors = extract_video_vectors(existing_video_path)
+
+#         # 벡터 간 유사도 비교 (평균값)
+#         similarity_scores = [
+#             1 - cosine(new_vector, existing_vector)
+#             for new_vector, existing_vector in zip(new_vectors, existing_vectors)
+#         ]
+
+#         avg_similarity = np.mean(similarity_scores)
+#         similarities.append(avg_similarity)
+
+#     # 가장 높은 유사도 찾기
+#     max_similarity = max(similarities) if similarities else 0
+
+#     # 유사도가 너무 높으면 업로드하지 않음 (예: 90% 이상)
+#     SIMILARITY_THRESHOLD = 0.9
+#     if max_similarity >= SIMILARITY_THRESHOLD:
+#         return jsonify({'error': 'Too similar to existing videos', 'similarity': max_similarity}), 400
+
+#     # 유사도가 낮다면 S3에 저장
+#     s3_url = upload_to_s3(new_video_path, f"videos/{new_video}")
+#     return jsonify({'message': 'File uploaded successfully', 's3_url': s3_url}), 200
+
+
+#-------main-------------
 
 if __name__ == '__main__':
     app.run(debug=True)

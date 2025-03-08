@@ -11,6 +11,8 @@ scikit-image = "*"
 torch = "*"
 torchvision = "*"
 numpy = "*"
+boto3 = "*"
+requests = "*"
 
 [dev-packages]
 
