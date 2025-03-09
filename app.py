@@ -24,6 +24,7 @@ S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 if not all([AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME]):
     raise ValueError("환경 변수가 제대로 설정되지 않았습니다!")
 
+
 # S3 클라이언트 생성
 s3_client = boto3.client(
     "s3",
@@ -39,14 +40,13 @@ os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 @app.route("/download", methods=['POST'])
 def download_video():
     data = request.json
-    video_url = data.get('video_url')
+    video_url = data.get('file_url')
     
     if not video_url:
         return jsonify({"error": "No video_url provided"}), 400
     
     # S3 객체 키(파일 경로) 추출
     object_key = video_url.split(".com/")[-1]  # "videos/test3.mov"
-    
     
     try:
         # 다운로드할 파일 경로 설정
@@ -56,11 +56,121 @@ def download_video():
         # S3에서 파일 다운로드
         s3_client.download_file(S3_BUCKET_NAME, object_key, file_path)
         
-        return jsonify({"message": "Download successful", "file_path": file_path})
+        #return jsonify({"message": "Download successful", "file_path": file_path})
+        
+        # ✅ 자동으로 check_similarity 수행
+        similarity_result = perform_similarity_check(file_path)
+
+        return jsonify({
+            "message": "Download successful",
+            "file_path": file_path,
+            "similarity_check_result": similarity_result
+        })
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def perform_similarity_check(video_path):
+    """
+    저장된 모든 벡터와 입력된 영상의 벡터 간 코사인 유사도 비교.
+    같은 영상인지 판단하는 기준:
+    - 한 개 이상의 벡터가 0.95 이상
+    - 평균 유사도가 0.8 이상
+    """
+    if not video_path or not os.path.exists(video_path):
+        return {"error": "Invalid video path"}
+
+    try:
+        # 1️⃣ FAISS 인덱스 로드
+        load_faiss_index()
+
+        # 2️⃣ 저장된 벡터 개수 확인
+        total_vectors = faiss_index.index.ntotal
+        if total_vectors == 0:
+            similarity_result = {
+                "message": "유사도 검사를 통과하였습니다",
+                "max_similarity": 0,
+                "avg_similarity": 0
+            }
+            notify_springboot(video_path, similarity_result, passed=True)
+            return similarity_result
+            
+
+        # 3️⃣ 비교할 영상에서 프레임 추출
+        frames = extract_frames(video_path)
+
+        # 4️⃣ 프레임의 특징 벡터 추출
+        feature_vectors = extract_features(frames)
+
+        # 5️⃣ 벡터 정규화 (코사인 유사도 기반 비교)
+        query_vectors = np.array(feature_vectors).astype('float32')
+        faiss.normalize_L2(query_vectors)
+
+        # 6️⃣ 각 프레임의 벡터를 FAISS에 저장된 모든 벡터와 비교
+        similarity_scores = []
+        for query_vector in query_vectors:
+            query_vector = query_vector.reshape(1, -1)
+            faiss.normalize_L2(query_vector)  # ✅ 검색 벡터 정규화
+            distances, _ = faiss_index.index.search(query_vector, total_vectors)
+            similarity_scores.extend(distances[0].tolist())
+
+        # 7️⃣ 검사 기준 적용
+        max_similarity = max(similarity_scores)
+        avg_similarity = sum(similarity_scores) / len(similarity_scores)
+
+        similarity_result = {
+            "max_similarity": max_similarity,
+            "avg_similarity": avg_similarity
+        }
+
+        if max_similarity >= 0.9 and avg_similarity >= 0.8:
+            similarity_result["message"] = "같은 영상이 이미 존재합니다"
+            delete_file(video_path)  # ❌ 기존 영상 삭제
+            notify_springboot(video_path, similarity_result, passed=False)  # Spring Boot에 실패 전송
+        else:
+            similarity_result["message"] = "유사도 검사를 통과하였습니다"
+            faiss_index.add_vectors(feature_vectors)  # ✅ FAISS에 벡터 저장
+            save_faiss_index()  # 저장된 FAISS 인덱스 파일 업데이트
+            delete_file(video_path)  # ❌ 기존 영상 삭제
+            notify_springboot(video_path, similarity_result, passed=True)  # Spring Boot에 성공 전송
+            
+            return similarity_result
+
+    except Exception as e:
+        return {"error": str(e)}
+
+def delete_file(file_path):
+    """로컬에 저장된 영상 파일 삭제"""
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"🗑 파일 삭제 완료: {file_path}")
+    except Exception as e:
+        print(f"🚨 파일 삭제 오류: {e}")
+        
+        
+SPRINGBOOT_URL = "http://127.0.0.1:8080/video/similarity-check"  # Spring Boot 서버 URL
+
+def notify_springboot(video_path, similarity_result, passed):
+    """
+    Spring Boot 서버에 유사도 검사 결과 전송
+    :param video_path: 검사한 영상 경로
+    :param similarity_result: 유사도 검사 결과
+    :param passed: 유사도 검사를 통과했는지 여부 (True: 통과, False: 실패)
+    """
+    payload = {
+        "video_path": video_path,
+        "max_similarity": similarity_result["max_similarity"],
+        "avg_similarity": similarity_result["avg_similarity"],
+        "message": similarity_result["message"],
+        "passed": passed  # ✅ 통과 여부 추가
+    }
+
+    try:
+        response = requests.post(SPRINGBOOT_URL, json=payload)
+        print(f"📡 Spring Boot 응답: {response.status_code} - {response.text}")
+    except requests.exceptions.RequestException as e:
+        print(f"🚨 Spring Boot 전송 오류: {e}")
 
 
 #영상 프레임 추출
