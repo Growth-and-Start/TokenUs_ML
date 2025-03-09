@@ -9,8 +9,10 @@ __pycache__/
 Pipfile.lock
 
 # 동영상 및 프레임 폴더 제외 (Git 관리 대상 X)
-uploads/
-frames/
+downloads/
 
 # Mac 시스템 파일 제외
 .DS_Store
+
+#FAISS 벡터 데이터
+faiss_index.bin
