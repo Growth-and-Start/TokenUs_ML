@@ -37,6 +37,22 @@ s3_client = boto3.client(
 DOWNLOAD_FOLDER = "downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+def delete_s3_file(s3_url):
+    """
+    S3에 업로드된 영상을 삭제하는 함수
+    """
+    try:
+        # S3 URL에서 버킷명과 파일 키 추출
+        bucket_name = "tokenus-storage"  # ✅ S3 버킷명
+        key = s3_url.replace(f"https://{bucket_name}.s3.ap-northeast-2.amazonaws.com/", "")
+
+        # S3 객체 삭제
+        s3_client.delete_object(Bucket=bucket_name, Key=key)
+        print(f"✅ S3에서 파일 삭제 성공: {s3_url}")
+
+    except Exception as e:
+        print(f"❌ S3에서 파일 삭제 실패: {s3_url}, 오류: {e}")
+
 @app.route("/download", methods=['POST'])
 def download_video():
     data = request.json
@@ -74,8 +90,8 @@ def perform_similarity_check(video_path):
     """
     저장된 모든 벡터와 입력된 영상의 벡터 간 코사인 유사도 비교.
     같은 영상인지 판단하는 기준:
-    - 한 개 이상의 벡터가 0.95 이상
-    - 평균 유사도가 0.8 이상
+    - 한 개 이상의 벡터가 0.8 이상
+    - 평균 유사도가 0.75 이상
     """
     if not video_path or not os.path.exists(video_path):
         return {"error": "Invalid video path"}
@@ -123,16 +139,28 @@ def perform_similarity_check(video_path):
             "avg_similarity": avg_similarity
         }
 
-        if max_similarity >= 0.9 and avg_similarity >= 0.8:
-            similarity_result["message"] = "같은 영상이 이미 존재합니다"
-            delete_file(video_path)  # ❌ 기존 영상 삭제
-            notify_springboot(video_path, similarity_result, passed=False)  # Spring Boot에 실패 전송
+        if max_similarity >= 1.0 or (max_similarity >= 0.9 and avg_similarity >= 0.8):
+            similarity_result["message"] = "유사도 검사를 실패하였습니다"
+            # ❌ 로컬 파일 삭제
+            delete_file(video_path)
+
+            # ❌ S3에서도 삭제
+            delete_s3_file(video_path)
+
+            # ❌ Spring Boot 서버에 유사도 검사 실패 알림
+            notify_springboot(video_path, similarity_result, passed=False)
+            return similarity_result
         else:
             similarity_result["message"] = "유사도 검사를 통과하였습니다"
-            faiss_index.add_vectors(feature_vectors)  # ✅ FAISS에 벡터 저장
+            # ✅ FAISS에 벡터 저장
+            faiss_index.add_vectors(feature_vectors)
             save_faiss_index()  # 저장된 FAISS 인덱스 파일 업데이트
-            delete_file(video_path)  # ❌ 기존 영상 삭제
-            notify_springboot(video_path, similarity_result, passed=True)  # Spring Boot에 성공 전송
+
+            # ❌ 로컬 파일 삭제
+            delete_file(video_path)
+
+            # ✅ Spring Boot 서버에 유사도 검사 성공 알림
+            notify_springboot(video_path, similarity_result, passed=True)
             
             return similarity_result
 
@@ -167,7 +195,9 @@ def notify_springboot(video_path, similarity_result, passed):
     }
 
     try:
-        response = requests.post(SPRINGBOOT_URL, json=payload)
+        print("payload:",payload)
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(SPRINGBOOT_URL, json=payload, headers=headers)
         print(f"📡 Spring Boot 응답: {response.status_code} - {response.text}")
     except requests.exceptions.RequestException as e:
         print(f"🚨 Spring Boot 전송 오류: {e}")
