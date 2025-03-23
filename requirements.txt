@@ -1,6 +1,22 @@
+# flask
+# torch
+# torchvision
+# numpy
+# opencv-python
+# scipy
+# requests
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 flask
-torch
-torchvision
-numpy
-opencv-python
+torch==1.13.1+cpu
+torchvision==0.14.1+cpu
+numpy<2.0.0
+opencv-python-headless
 scipy
+requests
+boto3
+python-dotenv
+faiss-cpu
+pymysql
+cryptography==42.0.5

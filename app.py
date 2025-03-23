@@ -9,6 +9,7 @@ import torchvision.transforms as transforms
 from torchvision.models import resnet50
 import faiss
 import numpy as np
+import pymysql
 
 app = Flask(__name__)
 
@@ -18,11 +19,23 @@ load_dotenv(".env")
 # 환경 변수 로드
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = os.getenv("AWS_REGION")
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 if not all([AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME]):
     raise ValueError("환경 변수가 제대로 설정되지 않았습니다!")
+
+# DB 연결 함수
+def get_db_connection():
+    return pymysql.connect(
+        host=os.getenv("MYSQL_HOST"),
+        port=int(os.getenv("MYSQL_PORT")),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DATABASE"),
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
 
 
 # S3 클라이언트 생성
@@ -75,7 +88,8 @@ def download_video():
         #return jsonify({"message": "Download successful", "file_path": file_path})
         
         # ✅ 자동으로 check_similarity 수행
-        similarity_result = perform_similarity_check(file_path)
+        video_id = get_next_video_id()
+        similarity_result = perform_similarity_check(file_path, video_id)
 
         return jsonify({
             "message": "Download successful",
@@ -86,7 +100,7 @@ def download_video():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def perform_similarity_check(video_path):
+def perform_similarity_check(video_path, video_id):
     """
     저장된 모든 벡터와 입력된 영상의 벡터 간 코사인 유사도 비교.
     같은 영상인지 판단하는 기준:
@@ -103,12 +117,25 @@ def perform_similarity_check(video_path):
         # 2️⃣ 저장된 벡터 개수 확인
         total_vectors = faiss_index.index.ntotal
         if total_vectors == 0:
+            # 🔹 비교할 영상에서 프레임 추출 및 벡터화
+            frames = extract_frames(video_path)
+            feature_vectors = extract_features(frames)
+
+            # 🔹 FAISS 및 DB 저장
+            start_index = faiss_index.index.ntotal
+            faiss_index.add_vectors(feature_vectors)
+            save_faiss_index()
+            insert_vector_metadata(video_id, start_index, len(feature_vectors))
+
             similarity_result = {
                 "message": "유사도 검사를 통과하였습니다",
                 "max_similarity": 0,
                 "avg_similarity": 0
             }
+
             notify_springboot(video_path, similarity_result, passed=True)
+            delete_file(video_path)
+            
             return similarity_result
             
 
@@ -141,6 +168,17 @@ def perform_similarity_check(video_path):
 
         if max_similarity >= 1.0 or (max_similarity >= 0.9 and avg_similarity >= 0.8):
             similarity_result["message"] = "유사도 검사를 실패하였습니다"
+            
+            # 🔥 가장 유사한 인덱스 찾기
+            query_vector = query_vectors[0].reshape(1, -1)
+            faiss.normalize_L2(query_vector)
+            distances, indices = faiss_index.index.search(query_vector, total_vectors)
+            most_similar_idx = indices[0][0]
+
+            # 🔥 해당 벡터의 video_id 조회
+            similar_video_id = get_video_id_by_faiss_index(most_similar_idx)
+            similarity_result["similar_video_id"] = similar_video_id
+            
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
 
@@ -152,9 +190,11 @@ def perform_similarity_check(video_path):
             return similarity_result
         else:
             similarity_result["message"] = "유사도 검사를 통과하였습니다"
-            # ✅ FAISS에 벡터 저장
+            # 🔹 FAISS + MySQL 저장
+            start_index = faiss_index.index.ntotal
             faiss_index.add_vectors(feature_vectors)
-            save_faiss_index()  # 저장된 FAISS 인덱스 파일 업데이트
+            save_faiss_index()
+            insert_vector_metadata(video_id, start_index, len(feature_vectors))
 
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
@@ -168,16 +208,28 @@ def perform_similarity_check(video_path):
         return {"error": str(e)}
 
 def delete_file(file_path):
-    """로컬에 저장된 영상 파일 삭제"""
     try:
+        print(f"🧪 삭제 시도: {file_path}")  # ✅ 추가
         if os.path.exists(file_path):
             os.remove(file_path)
             print(f"🗑 파일 삭제 완료: {file_path}")
+        else:
+            print(f"❓ 파일이 존재하지 않음: {file_path}")  # ✅ 추가
     except Exception as e:
         print(f"🚨 파일 삭제 오류: {e}")
+
         
         
-SPRINGBOOT_URL = "http://127.0.0.1:8080/video/similarity-check"  # Spring Boot 서버 URL
+# SPRINGBOOT_URL = "http://127.0.0.1:8080/video/similarity-check"  # Spring Boot 서버 URL
+# 환경 변수에서 Spring Boot 서버 URL 로드
+springboot_url = os.getenv("SPRINGBOOT_URL", "")
+api_path = os.getenv("API_PATH", "")
+
+SPRINGBOOT_URL = springboot_url + api_path
+
+if not SPRINGBOOT_URL:
+    raise ValueError("환경 변수 SPRINGBOOT_URL이 설정되지 않았습니다!")
+
 
 def notify_springboot(video_path, similarity_result, passed):
     """
@@ -329,7 +381,11 @@ def convert_faiss_to_cosine():
     print("✅ L2 → 코사인 유사도 변환 완료 및 저장됨!")
 
  
-FAISS_INDEX_PATH = "faiss_index.bin"
+# FAISS_INDEX_PATH = "faiss_index.bin"
+FAISS_INDEX_PATH = "faiss_index/faiss_index.bin"
+# ✅ faiss_index 디렉토리 생성
+os.makedirs(os.path.dirname(FAISS_INDEX_PATH), exist_ok=True)
+
 
 def save_faiss_index():
     """FAISS 인덱스를 파일로 저장"""
@@ -375,6 +431,25 @@ def process_video():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+    
+def get_next_video_id():
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = "SELECT MAX(CAST(video_id AS UNSIGNED)) AS max_id FROM video_vectors"
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            conn.close()
+
+            if result and result['max_id'] is not None:
+                return str(result['max_id'] + 1)
+            else:
+                return "1"  # 최초 영상일 경우
+    except Exception as e:
+        print(f"❌ video_id 생성 오류: {e}")
+        return "1"
+
 
 @app.route('/faiss_info', methods=['GET'])
 def faiss_info():
@@ -502,9 +577,73 @@ def check_similarity():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+def insert_vector_metadata(video_id, start_idx, count):
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            for i in range(count):
+                sql = "INSERT INTO video_vectors (video_id, faiss_index) VALUES (%s, %s)"
+                cursor.execute(sql, (video_id, start_idx + i))
+        conn.commit()
+        conn.close()
+        print(f"✅ MySQL에 {count}개 벡터 메타데이터 저장 완료")
+    except Exception as e:
+        print(f"❌ MySQL 삽입 오류: {e}")
 
 
+def get_video_id_by_faiss_index(faiss_index):
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = "SELECT video_id FROM video_vectors WHERE faiss_index = %s LIMIT 1"
+            cursor.execute(sql, (faiss_index,))
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                return result["video_id"]
+            else:
+                return "unknown"
+    except Exception as e:
+        print(f"❌ video_id 조회 오류: {e}")
+        return "unknown"
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/test_db_insert', methods=['POST'])
+def test_db_insert():
+    data = request.json
+    video_id = data.get("video_id")
+    faiss_index = data.get("faiss_index")
+
+    if not video_id or faiss_index is None:
+        return jsonify({"error": "video_id와 faiss_index는 필수입니다"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # insert
+        sql = "INSERT INTO video_vectors (video_id, faiss_index) VALUES (%s, %s)"
+        cursor.execute(sql, (video_id, faiss_index))
+        conn.commit()
+
+        # select
+        cursor.execute("SELECT * FROM video_vectors ORDER BY id DESC LIMIT 1")
+        result = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({"message": "삽입 성공", "last_inserted": result}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/health')
+def health():
+    return 'ok', 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
