@@ -177,7 +177,16 @@ def delete_file(file_path):
         print(f"🚨 파일 삭제 오류: {e}")
         
         
-SPRINGBOOT_URL = "http://127.0.0.1:8080/video/similarity-check"  # Spring Boot 서버 URL
+# SPRINGBOOT_URL = "http://127.0.0.1:8080/video/similarity-check"  # Spring Boot 서버 URL
+# 환경 변수에서 Spring Boot 서버 URL 로드
+springboot_url = os.getenv("SPRINGBOOT_URL", "")
+api_path = os.getenv("API_PATH", "")
+
+SPRINGBOOT_URL = springboot_url + api_path
+
+if not SPRINGBOOT_URL:
+    raise ValueError("환경 변수 SPRINGBOOT_URL이 설정되지 않았습니다!")
+
 
 def notify_springboot(video_path, similarity_result, passed):
     """
@@ -504,7 +513,9 @@ def check_similarity():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/health')
+def health():
+    return 'ok', 200
 
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

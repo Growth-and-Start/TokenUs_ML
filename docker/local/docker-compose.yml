@@ -1,0 +1,30 @@
+name: tokenus-flask
+
+services:
+  tokenus-flask:
+    container_name: tokenus-flask
+    build:
+      context: ../../           # Dockerfile이 있는 디렉토리
+      dockerfile: Dockerfile   # 생략 가능 (파일명이 Dockerfile이면)
+    platform: linux/amd64    # 여기서 플랫폼 설정
+    image: tokenus/ml:latest    # 빌드된 이미지 태그
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1G"
+    env_file: ../../.env
+    ports:
+      - "5001:5000"
+    volumes:
+      - faiss_data:/app/faiss_index
+    networks:
+      - network
+    restart: always
+
+networks:
+  network:
+    driver: bridge
+
+volumes:
+  faiss_data:
