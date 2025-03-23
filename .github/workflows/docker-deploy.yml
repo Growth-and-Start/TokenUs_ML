@@ -1,0 +1,50 @@
+name: Build and Push Flask Docker Image to ECR and Deploy on EC2
+
+on:
+  push:
+    branches:
+      - release  # release 브랜치에 push될 때 실행
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. 리포지토리 가져오기
+        uses: actions/checkout@v4
+
+      - name: 2. AWS 자격 증명 구성
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: 3. Amazon ECR 로그인
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: 4. Docker Image 빌드 및 ECR에 push
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}  # Flask용 ECR 리포지토리
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  run-flask-on-ec2:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 5. EC2 접속 및 Flask 컨테이너 실행
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd ml-deploy-script
+            sh ./deploy.sh
