@@ -19,12 +19,13 @@ services:
     volumes:
       - faiss_data:/app/faiss_index
     networks:
-      - network
+      - tokenus_network
     restart: always
 
 networks:
-  network:
-    driver: bridge
+  tokenus_network:
+    external: true
+
 
 volumes:
   faiss_data:

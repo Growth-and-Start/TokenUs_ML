@@ -18,3 +18,5 @@ requests
 boto3
 python-dotenv
 faiss-cpu
+pymysql
+cryptography==42.0.5
