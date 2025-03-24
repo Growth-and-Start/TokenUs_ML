@@ -10,14 +10,14 @@ fi
 
 # Docker compose down으로 기존 컨테이너 중지 및 삭제
 echo "Docker compose down 실행"
-docker compose-down --remove-orphans
+docker compose down --remove-orphans
 
 # 볼륨이 없으면 생성
 docker volume create faiss_data || true
 
 # Docker compose up 실행
 echo "Docker compose up 실행"
-if ! docker-compose up -d; then
+if ! docker compose up -d; then
     echo "컨테이너 실행에 실패했습니다"
     exit 1
 fi
