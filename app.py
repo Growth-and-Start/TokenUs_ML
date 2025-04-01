@@ -89,18 +89,19 @@ def download_video():
         
         # ✅ 자동으로 check_similarity 수행
         video_id = get_next_video_id()
-        similarity_result = perform_similarity_check(file_path, video_id)
+        similarity_result = perform_similarity_check(file_path, video_id, video_url)
 
         return jsonify({
             "message": "Download successful",
-            "file_path": file_path,
+            "video_url": video_url,
             "similarity_check_result": similarity_result
         })
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#object_key : 영상의 S3 url
 
-def perform_similarity_check(video_path, video_id):
+def perform_similarity_check(video_path, video_id, video_url):
     """
     저장된 모든 벡터와 입력된 영상의 벡터 간 코사인 유사도 비교.
     같은 영상인지 판단하는 기준:
@@ -116,6 +117,8 @@ def perform_similarity_check(video_path, video_id):
 
         # 2️⃣ 저장된 벡터 개수 확인
         total_vectors = faiss_index.index.ntotal
+        
+        # 0️⃣저장된 비디오가 없을때
         if total_vectors == 0:
             # 🔹 비교할 영상에서 프레임 추출 및 벡터화
             frames = extract_frames(video_path)
@@ -130,10 +133,11 @@ def perform_similarity_check(video_path, video_id):
             similarity_result = {
                 "message": "유사도 검사를 통과하였습니다",
                 "max_similarity": 0,
-                "avg_similarity": 0
+                "avg_similarity": 0,
+                "passed":True
             }
 
-            notify_springboot(video_path, similarity_result, passed=True)
+            notify_springboot(similarity_result)
             delete_file(video_path)
             
             return similarity_result
@@ -168,6 +172,7 @@ def perform_similarity_check(video_path, video_id):
 
         if max_similarity >= 1.0 or (max_similarity >= 0.9 and avg_similarity >= 0.8):
             similarity_result["message"] = "유사도 검사를 실패하였습니다"
+            similarity_result["passed"]=False
             
             # 🔥 가장 유사한 인덱스 찾기
             query_vector = query_vectors[0].reshape(1, -1)
@@ -186,10 +191,12 @@ def perform_similarity_check(video_path, video_id):
             delete_s3_file(video_path)
 
             # ❌ Spring Boot 서버에 유사도 검사 실패 알림
-            notify_springboot(video_path, similarity_result, passed=False)
+            notify_springboot(similarity_result)
             return similarity_result
         else:
             similarity_result["message"] = "유사도 검사를 통과하였습니다"
+            similarity_result["passed"]=True
+
             # 🔹 FAISS + MySQL 저장
             start_index = faiss_index.index.ntotal
             faiss_index.add_vectors(feature_vectors)
@@ -200,7 +207,7 @@ def perform_similarity_check(video_path, video_id):
             delete_file(video_path)
 
             # ✅ Spring Boot 서버에 유사도 검사 성공 알림
-            notify_springboot(video_path, similarity_result, passed=True)
+            notify_springboot(similarity_result)
             
             return similarity_result
 
@@ -231,7 +238,7 @@ if not SPRINGBOOT_URL:
     raise ValueError("환경 변수 SPRINGBOOT_URL이 설정되지 않았습니다!")
 
 
-def notify_springboot(video_path, similarity_result, passed):
+def notify_springboot(similarity_result):
     """
     Spring Boot 서버에 유사도 검사 결과 전송
     :param video_path: 검사한 영상 경로
@@ -239,11 +246,10 @@ def notify_springboot(video_path, similarity_result, passed):
     :param passed: 유사도 검사를 통과했는지 여부 (True: 통과, False: 실패)
     """
     payload = {
-        "video_path": video_path,
         "max_similarity": similarity_result["max_similarity"],
         "avg_similarity": similarity_result["avg_similarity"],
         "message": similarity_result["message"],
-        "passed": passed  # ✅ 통과 여부 추가
+        "passed": similarity_result["passed"]
     }
 
     try:
