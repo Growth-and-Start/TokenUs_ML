@@ -72,7 +72,7 @@ def download_video():
     video_url = data.get('file_url')
     
     if not video_url:
-        return jsonify({"error": "No file_url provided"}), 400
+        return jsonify({"error": "No video_url provided"}), 400
     
     # S3 객체 키(파일 경로) 추출
     object_key = video_url.split(".com/")[-1]  # "videos/test3.mov"
