@@ -1,4 +1,4 @@
-name: tokenus-flask
+name: tokenus
 
 services:
   tokenus-flask:
@@ -17,15 +17,15 @@ services:
     ports:
       - "5001:5000"
     volumes:
-      - faiss_data:/app/faiss_index
+      - faiss_volume:/app/faiss_index
     networks:
-      - tokenus_network
+      - tokenus_shared_network
     restart: always
 
 networks:
-  tokenus_network:
+  tokenus_shared_network:
     external: true
 
 
 volumes:
-  faiss_data:
+  faiss_volume:
