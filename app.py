@@ -11,7 +11,12 @@ import faiss
 import numpy as np
 import pymysql
 
+import logging
+
 app = Flask(__name__)
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # 환경 변수 로드
 load_dotenv(".env")
@@ -21,6 +26,7 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+logger.info("🔥🔥🔥 env 파일 호출됨!")
 
 if not all([AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME]):
     raise ValueError("환경 변수가 제대로 설정되지 않았습니다!")
@@ -36,7 +42,7 @@ def get_db_connection():
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )
-
+logger.info("🔥🔥🔥 DB연결됨!")
 
 # S3 클라이언트 생성
 s3_client = boto3.client(
@@ -46,9 +52,12 @@ s3_client = boto3.client(
     region_name=AWS_REGION
 )
 
+logger.info("🔥🔥🔥 S3 클라이언트 생성됨!")
+
 # 다운로드된 영상을 저장할 폴더 생성
 DOWNLOAD_FOLDER = "downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+logger.info("🔥🔥🔥 다운로드할 폴더 준비 완료!")
 
 def delete_s3_file(s3_url):
     """
@@ -61,15 +70,17 @@ def delete_s3_file(s3_url):
 
         # S3 객체 삭제
         s3_client.delete_object(Bucket=bucket_name, Key=key)
-        print(f"✅ S3에서 파일 삭제 성공: {s3_url}")
+        logger.info(f"✅ S3에서 파일 삭제 성공: {s3_url}")
 
     except Exception as e:
-        print(f"❌ S3에서 파일 삭제 실패: {s3_url}, 오류: {e}")
+        logger.info(f"❌ S3에서 파일 삭제 실패: {s3_url}, 오류: {e}")
 
 @app.route("/download", methods=['POST'])
 def download_video():
+    logger.info("🔥🔥🔥 download_video 호출됨!")
     data = request.json
     video_url = data.get('file_url')
+    logger.info(f"🔥영상 url:{video_url}")
     
     if not video_url:
         return jsonify({"error": "No video_url provided"}), 400
@@ -108,6 +119,7 @@ def perform_similarity_check(video_path, video_id, video_url):
     - 한 개 이상의 벡터가 0.8 이상
     - 평균 유사도가 0.75 이상
     """
+    logger.info("🔥SimilarityCheck시작")
     if not video_path or not os.path.exists(video_path):
         return {"error": "Invalid video path"}
 
@@ -134,8 +146,10 @@ def perform_similarity_check(video_path, video_id, video_url):
                 "message": "유사도 검사를 통과하였습니다",
                 "max_similarity": 0,
                 "avg_similarity": 0,
-                "passed":True
+                "passed":True,
+                "video_url":video_url
             }
+            logger.info(similarity_result)
 
             notify_springboot(similarity_result)
             delete_file(video_path)
@@ -167,22 +181,29 @@ def perform_similarity_check(video_path, video_id, video_url):
 
         similarity_result = {
             "max_similarity": max_similarity,
-            "avg_similarity": avg_similarity
+            "avg_similarity": avg_similarity,
+            "video_url":video_url
         }
+        logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
 
         if max_similarity >= 1.0 or (max_similarity >= 0.9 and avg_similarity >= 0.8):
             similarity_result["message"] = "유사도 검사를 실패하였습니다"
+            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             similarity_result["passed"]=False
+            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             
             # 🔥 가장 유사한 인덱스 찾기
             query_vector = query_vectors[0].reshape(1, -1)
             faiss.normalize_L2(query_vector)
             distances, indices = faiss_index.index.search(query_vector, total_vectors)
             most_similar_idx = indices[0][0]
+            logger.info(f"🔍 가장 유사한 벡터 인덱스: {most_similar_idx}")
 
             # 🔥 해당 벡터의 video_id 조회
             similar_video_id = get_video_id_by_faiss_index(most_similar_idx)
+            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             similarity_result["similar_video_id"] = similar_video_id
+            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
@@ -208,6 +229,7 @@ def perform_similarity_check(video_path, video_id, video_url):
 
             # ✅ Spring Boot 서버에 유사도 검사 성공 알림
             notify_springboot(similarity_result)
+            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             
             return similarity_result
 
@@ -239,6 +261,7 @@ if not SPRINGBOOT_URL:
 
 
 def notify_springboot(similarity_result):
+    logger.info("🚨nofity_springboot 진입!: {similarity_result}")
     """
     Spring Boot 서버에 유사도 검사 결과 전송
     :param video_path: 검사한 영상 경로
@@ -249,16 +272,18 @@ def notify_springboot(similarity_result):
         "max_similarity": similarity_result["max_similarity"],
         "avg_similarity": similarity_result["avg_similarity"],
         "message": similarity_result["message"],
-        "passed": similarity_result["passed"]
+        "passed": similarity_result["passed"],
+        "similar_video_id": similarity_result["similar_video_id"],
+        "video_url":similarity_result["video_url"]
     }
 
     try:
-        print("payload:",payload)
+        logger.info(f"🚨payload: {payload}")
         headers = {'Content-Type': 'application/json'}
         response = requests.post(SPRINGBOOT_URL, json=payload, headers=headers)
-        print(f"📡 Spring Boot 응답: {response.status_code} - {response.text}")
+        logger.info(f"📡 Spring Boot 응답: {response.status_code} - {response.text}")
     except requests.exceptions.RequestException as e:
-        print(f"🚨 Spring Boot 전송 오류: {e}")
+        logger.info(f"🚨 Spring Boot 전송 오류: {e}")
 
 
 #영상 프레임 추출
@@ -453,7 +478,7 @@ def get_next_video_id():
             else:
                 return "1"  # 최초 영상일 경우
     except Exception as e:
-        print(f"❌ video_id 생성 오류: {e}")
+        logger.info(f"❌ video_id 생성 오류: {e}")
         return "1"
 
 
@@ -465,7 +490,7 @@ def faiss_info():
     try:
         load_faiss_index()
         total_vectors = faiss_index.index.ntotal
-        print(f"📊 현재 저장된 벡터 개수: {total_vectors}")  # ✅ 디버깅 로그 추가
+        logger.info(f"📊 현재 저장된 벡터 개수: {total_vectors}")  # ✅ 디버깅 로그 추가
         return jsonify({"message": "FAISS index info", "total_vectors": total_vectors})
 
     except Exception as e:
@@ -599,6 +624,7 @@ def insert_vector_metadata(video_id, start_idx, count):
 
 
 def get_video_id_by_faiss_index(faiss_index):
+    logger.info("🔥유사한 영상을 찾으러 옴")
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -608,8 +634,10 @@ def get_video_id_by_faiss_index(faiss_index):
             conn.close()
 
             if result:
+                logger.info(f"✅ video_id 찾음: {result['video_id']}")
                 return result["video_id"]
             else:
+                logger.info(f"❌ 해당 faiss_index에 해당하는 video_id 없음: {faiss_index}")
                 return "unknown"
     except Exception as e:
         print(f"❌ video_id 조회 오류: {e}")
