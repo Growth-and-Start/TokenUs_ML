@@ -262,6 +262,7 @@ if not SPRINGBOOT_URL:
 
 def notify_springboot(similarity_result):
     logger.info("🚨nofity_springboot 진입!: {similarity_result}")
+    logger.info("💡SpringBoot 서버:{SPRINGBOOT_URL}")
     """
     Spring Boot 서버에 유사도 검사 결과 전송
     :param video_path: 검사한 영상 경로
@@ -436,6 +437,14 @@ faiss_index = FAISSIndex(dim=2048)
 # 서버 시작 시 FAISS 인덱스 로드
 load_faiss_index()
 convert_faiss_to_cosine()  # ✅ 기존 데이터가 있으면 변환
+
+# ✅ 일회성 인덱스 초기화 코드 (서버 중단 없이 초기화하고 나중에 삭제 예정)
+print("⚠️ FAISS 인덱스를 초기화합니다! (이 코드는 일회성으로 제거 예정)")
+faiss_index.index = faiss.IndexFlatIP(2048)  # 새로 생성
+save_faiss_index()
+
+# (선택) 기존 데이터 변환 로직은 생략 가능
+# convert_faiss_to_cosine()
 
 @app.route('/process_video', methods=['POST'])
 def process_video():
