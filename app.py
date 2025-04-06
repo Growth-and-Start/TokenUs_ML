@@ -438,10 +438,10 @@ faiss_index = FAISSIndex(dim=2048)
 load_faiss_index()
 convert_faiss_to_cosine()  # ✅ 기존 데이터가 있으면 변환
 
-# ✅ 일회성 인덱스 초기화 코드 (서버 중단 없이 초기화하고 나중에 삭제 예정)
-print("⚠️ FAISS 인덱스를 초기화합니다! (이 코드는 일회성으로 제거 예정)")
-faiss_index.index = faiss.IndexFlatIP(2048)  # 새로 생성
-save_faiss_index()
+# # ✅ 일회성 인덱스 초기화 코드 (서버 중단 없이 초기화하고 나중에 삭제 예정)
+# print("⚠️ FAISS 인덱스를 초기화합니다! (이 코드는 일회성으로 제거 예정)")
+# faiss_index.index = faiss.IndexFlatIP(2048)  # 새로 생성
+# save_faiss_index()
 
 # (선택) 기존 데이터 변환 로직은 생략 가능
 # convert_faiss_to_cosine()
