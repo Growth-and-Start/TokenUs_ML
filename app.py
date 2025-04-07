@@ -126,15 +126,19 @@ def perform_similarity_check(video_path, video_id, video_url):
     try:
         # 1️⃣ FAISS 인덱스 로드
         load_faiss_index()
+        logger.info("🔥LoadIndex 성공")
 
         # 2️⃣ 저장된 벡터 개수 확인
         total_vectors = faiss_index.index.ntotal
+        logger.info(f"🔥전체 백터 수:{total_vectors}")
         
         # 0️⃣저장된 비디오가 없을때
         if total_vectors == 0:
             # 🔹 비교할 영상에서 프레임 추출 및 벡터화
             frames = extract_frames(video_path)
+            logger.info("0️⃣🔥extractframes완료")
             feature_vectors = extract_features(frames)
+            logger.info("🔥extractfeature완료")
 
             # 🔹 FAISS 및 DB 저장
             start_index = faiss_index.index.ntotal
@@ -147,10 +151,12 @@ def perform_similarity_check(video_path, video_id, video_url):
                 "max_similarity": 0,
                 "avg_similarity": 0,
                 "passed":True,
-                "video_url":video_url
+                "video_url":video_url,
+                "similar_video_id": None
             }
             logger.info(similarity_result)
 
+            logger.info(f"💡검사 결과:{similarity_result['passed']}")
             notify_springboot(similarity_result)
             delete_file(video_path)
             
@@ -159,13 +165,17 @@ def perform_similarity_check(video_path, video_id, video_url):
 
         # 3️⃣ 비교할 영상에서 프레임 추출
         frames = extract_frames(video_path)
+        logger.info("🔥extractframes완료")
 
         # 4️⃣ 프레임의 특징 벡터 추출
         feature_vectors = extract_features(frames)
+        logger.info("🔥extractfeature완료")
 
         # 5️⃣ 벡터 정규화 (코사인 유사도 기반 비교)
         query_vectors = np.array(feature_vectors).astype('float32')
+        logger.info("🔥 벡터 정규화 완료1")
         faiss.normalize_L2(query_vectors)
+        logger.info("🔥벡터 정규화 완료2")
 
         # 6️⃣ 각 프레임의 벡터를 FAISS에 저장된 모든 벡터와 비교
         similarity_scores = []
@@ -174,23 +184,27 @@ def perform_similarity_check(video_path, video_id, video_url):
             faiss.normalize_L2(query_vector)  # ✅ 검색 벡터 정규화
             distances, _ = faiss_index.index.search(query_vector, total_vectors)
             similarity_scores.extend(distances[0].tolist())
+            logger.info("🔥similarity check 진행중")
 
         # 7️⃣ 검사 기준 적용
         max_similarity = max(similarity_scores)
+        logger.info(f"🔥max:{max_similarity}")
         avg_similarity = sum(similarity_scores) / len(similarity_scores)
+        logger.info(f"🔥avg:{avg_similarity}")
 
         similarity_result = {
             "max_similarity": max_similarity,
             "avg_similarity": avg_similarity,
-            "video_url":video_url
+            "video_url":video_url,
+            "similar_video_id": None
         }
-        logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
+        logger.info(f"🚨notice spring 전달")
 
         if max_similarity >= 1.0 or (max_similarity >= 0.9 and avg_similarity >= 0.8):
             similarity_result["message"] = "유사도 검사를 실패하였습니다"
-            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             similarity_result["passed"]=False
-            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
+            logger.info(f"🚨실패했습니다.")
+
             
             # 🔥 가장 유사한 인덱스 찾기
             query_vector = query_vectors[0].reshape(1, -1)
@@ -201,9 +215,7 @@ def perform_similarity_check(video_path, video_id, video_url):
 
             # 🔥 해당 벡터의 video_id 조회
             similar_video_id = get_video_id_by_faiss_index(most_similar_idx)
-            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             similarity_result["similar_video_id"] = similar_video_id
-            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
@@ -217,19 +229,26 @@ def perform_similarity_check(video_path, video_id, video_url):
         else:
             similarity_result["message"] = "유사도 검사를 통과하였습니다"
             similarity_result["passed"]=True
+            logger.info(f"🚨통과헸습니다")
+
 
             # 🔹 FAISS + MySQL 저장
             start_index = faiss_index.index.ntotal
             faiss_index.add_vectors(feature_vectors)
             save_faiss_index()
+            logger.info(f"🚨faiss저장 완료")
+
             insert_vector_metadata(video_id, start_index, len(feature_vectors))
+            logger.info(f"🚨sql저장완료")
+
 
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
+            logger.info(f"🚨영상 삭제 완료")
+
 
             # ✅ Spring Boot 서버에 유사도 검사 성공 알림
             notify_springboot(similarity_result)
-            logger.info("🚨similarity_check -> notice spring 전달: {similarity_result}")
             
             return similarity_result
 
@@ -261,8 +280,8 @@ if not SPRINGBOOT_URL:
 
 
 def notify_springboot(similarity_result):
-    logger.info("🚨nofity_springboot 진입!: {similarity_result}")
-    logger.info("💡SpringBoot 서버:{SPRINGBOOT_URL}")
+    logger.info(f"🚨nofity_springboot 진입!:{similarity_result['passed']}")
+    logger.info(f"💡SpringBoot 서버:{SPRINGBOOT_URL}")
     """
     Spring Boot 서버에 유사도 검사 결과 전송
     :param video_path: 검사한 영상 경로
@@ -274,7 +293,7 @@ def notify_springboot(similarity_result):
         "avg_similarity": similarity_result["avg_similarity"],
         "message": similarity_result["message"],
         "passed": similarity_result["passed"],
-        "similar_video_id": similarity_result["similar_video_id"],
+        "similar_video_id": similarity_result.get("similar_video_id", None),
         "video_url":similarity_result["video_url"]
     }
 
@@ -502,6 +521,19 @@ def faiss_info():
         logger.info(f"📊 현재 저장된 벡터 개수: {total_vectors}")  # ✅ 디버깅 로그 추가
         return jsonify({"message": "FAISS index info", "total_vectors": total_vectors})
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/reset_faiss_index', methods=['POST'])
+def reset_faiss_index():
+    """
+    FAISS 벡터 초기화 API
+    """
+    try:
+        faiss_index.index = faiss.IndexFlatIP(2048)
+        save_faiss_index()
+        logger.info("🧹 FAISS 인덱스 초기화 완료")
+        return jsonify({"message": "FAISS 인덱스 초기화 완료"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
