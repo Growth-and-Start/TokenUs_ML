@@ -144,7 +144,7 @@ def perform_similarity_check(video_path, video_id, video_url):
             start_index = faiss_index.index.ntotal
             faiss_index.add_vectors(feature_vectors)
             save_faiss_index()
-            insert_vector_metadata(video_id, start_index, len(feature_vectors))
+            insert_vector_metadata(video_url, start_index, len(feature_vectors))
 
             similarity_result = {
                 "message": "유사도 검사를 통과하였습니다",
@@ -152,7 +152,7 @@ def perform_similarity_check(video_path, video_id, video_url):
                 "avg_similarity": 0,
                 "passed":True,
                 "video_url":video_url,
-                "similar_video_id": None
+                "similar_video_url": None
             }
             logger.info(similarity_result)
 
@@ -214,8 +214,8 @@ def perform_similarity_check(video_path, video_id, video_url):
             logger.info(f"🔍 가장 유사한 벡터 인덱스: {most_similar_idx}")
 
             # 🔥 해당 벡터의 video_id 조회
-            similar_video_id = get_video_id_by_faiss_index(most_similar_idx)
-            similarity_result["similar_video_id"] = similar_video_id
+            similar_video_url = get_video_url_by_faiss_index(most_similar_idx)
+            similarity_result["similar_video_url"] = similar_video_url
             
             # ❌ 로컬 파일 삭제
             delete_file(video_path)
@@ -238,7 +238,7 @@ def perform_similarity_check(video_path, video_id, video_url):
             save_faiss_index()
             logger.info(f"🚨faiss저장 완료")
 
-            insert_vector_metadata(video_id, start_index, len(feature_vectors))
+            insert_vector_metadata(video_url, start_index, len(feature_vectors))
             logger.info(f"🚨sql저장완료")
 
 
@@ -293,7 +293,7 @@ def notify_springboot(similarity_result):
         "avg_similarity": similarity_result["avg_similarity"],
         "message": similarity_result["message"],
         "passed": similarity_result["passed"],
-        "similar_video_id": similarity_result.get("similar_video_id", None),
+        "similar_video_url": similarity_result.get("similar_video_url", None),
         "video_url":similarity_result["video_url"]
     }
 
@@ -650,38 +650,37 @@ def check_similarity():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-def insert_vector_metadata(video_id, start_idx, count):
+def insert_vector_metadata(video_url, start_idx, count):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
             for i in range(count):
-                sql = "INSERT INTO video_vectors (video_id, faiss_index) VALUES (%s, %s)"
-                cursor.execute(sql, (video_id, start_idx + i))
+                sql = "INSERT INTO video_vectors (video_url, faiss_index) VALUES (%s, %s)"
+                cursor.execute(sql, (video_url, start_idx + i))
         conn.commit()
         conn.close()
         print(f"✅ MySQL에 {count}개 벡터 메타데이터 저장 완료")
     except Exception as e:
         print(f"❌ MySQL 삽입 오류: {e}")
 
-
-def get_video_id_by_faiss_index(faiss_index):
-    logger.info("🔥유사한 영상을 찾으러 옴")
+def get_video_url_by_faiss_index(faiss_index):
+    logger.info("🔥유사한 영상 찾기 시작")
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            sql = "SELECT video_id FROM video_vectors WHERE faiss_index = %s LIMIT 1"
+            sql = "SELECT video_url FROM video_vectors WHERE faiss_index = %s LIMIT 1"
             cursor.execute(sql, (faiss_index,))
             result = cursor.fetchone()
             conn.close()
 
             if result:
-                logger.info(f"✅ video_id 찾음: {result['video_id']}")
-                return result["video_id"]
+                logger.info(f"✅ video_url 찾음: {result['video_url']}")
+                return result["video_url"]
             else:
-                logger.info(f"❌ 해당 faiss_index에 해당하는 video_id 없음: {faiss_index}")
+                logger.info(f"❌ 해당 faiss_index에 해당하는 video_url 없음: {faiss_index}")
                 return "unknown"
     except Exception as e:
-        print(f"❌ video_id 조회 오류: {e}")
+        print(f"❌ video_url 조회 오류: {e}")
         return "unknown"
 
 
