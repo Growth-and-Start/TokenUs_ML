@@ -1,22 +1,21 @@
 # 🪙TokenUs🪙
 - 이화여자대학교 컴퓨터공학과 캡스톤디자인과창업프로젝트A,B
-- 개발 기간: 2024.09 ~ 진행 중
+- 개발 기간: 2024.09 ~ 2025.06
 
-## 팀 소개 : 8시 스쿼시 연맹
+## Team Info : 8시 스쿼시 연맹
 | 안희재 | 서지민 | 김원영 |
 | --- | --- | --- |
-| 1 | ![seojimin](https://ibb.co/gM8sWp6G)    | 3 |
+| @AnyJae | @SeoJimin1234    | @lasagna10 |
 | -FE 개발<br>-SmartContract개발 | -BE 개발<br>-ML 개발<br>-SmartContract 개발| -UX/UI 디자인<br>-FE개발<br>-SmartContract 개발 |
-| 7 | @Seojimin1234 | 9 |
 
 
 ## 프로젝트 소개
  영상을 NFT로 발행하여 영상의 고유 가치를 지키고, 불법 복제를 방지하며, 원저작자의 권리를 보호하고 투자의 기회까지 제공하는 영상 플랫폼.
-### 💡주요 기능1 - 영상 유사도 검사
+#### 주요 기능1 - 영상 유사도 검사
 사전 학습된 ResNet-50 모델과 Cosine Similarity를 활용한 유사도 검사. 영상의 고유성과 NFT의 가치를 보호하고, 불법 복제 방지.
-### 💡주요 기능2 - NFT 발행
+#### 주요 기능2 - NFT 발행
 Ethereum을 기반으로 한 NFT 발행
-### 💡주요 기능3 - NFT 거래
+#### 주요 기능3 - NFT 거래
 유저 간 자유로운 NFT 거래. 수익을 기대할 수 있음
 ## Stacks
 <img src="https://img.shields.io/badge/flask-000000?style=for-the-badge&logo=flask&logoColor=white"><br>
@@ -34,3 +33,31 @@ Ethereum을 기반으로 한 NFT 발행
 ###### 3.1. max_similarity가 1 이상이거나, average_similarity가 0.75 이상이고, max_similarity가 0.8이상인 경우, 같은 영상이 있다고 판단.
 ##### 4.1. 유사도 검사를 통과하였다면, S3에서 다운받은 영상 데이터 삭제/ FAISS에 특징 벡터 값 저장 / SpringBoot 백엔드 서버로 결과 반환
 ##### 4.2. 유사도 검사를 실패하였다면, S3에서 다운받은 영상 데이터 삭제 및 S3 스토리지 삭제 / SpringBoot 백엔드 서버로 결과 반환
+
+## How To Use
+#### 1. .env 파일 생성 및 작성
+
+```
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=
+S3_BUCKET_NAME=
+SPRINGBOOT_URL=
+API_PATH=
+ECR_REPOSITORY_NAME=
+
+MYSQL_HOST=
+MYSQL_PORT=
+MYSQL_USER=
+MYSQL_PASSWORD=
+MYSQL_DATABASE=
+```
+#### 2. 디렉터리 이동
+```
+cd docker/local/
+```
+
+#### 3. docker compose
+```
+docker-compose up -d
+```
