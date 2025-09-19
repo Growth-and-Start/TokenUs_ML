@@ -9,7 +9,7 @@ services:
       - ${NETWORK_NAME}
     restart: always
     volumes:
-      - ${VOLUME_NAME}:/app/faiss_index
+      - faiss_data:/app/faiss_index   # ✅ 변수 대신 고정 이름
     expose:
       - "${FLASK_PORT}"
     cpus: "${CPU_LIMIT}"
@@ -25,4 +25,4 @@ networks:
     external: true
 
 volumes:
-  ${VOLUME_NAME}:
+  faiss_data:   # ✅ 여기서는 반드시 고정 이름

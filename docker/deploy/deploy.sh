@@ -42,7 +42,7 @@ fi
 echo "Docker compose down 실행"
 docker compose down --remove-orphans
 
-docker volume create $VOLUME_NAME || true
+docker volume create faiss_data || true
 
 # ==============================
 # Docker compose up 실행
