@@ -65,7 +65,7 @@ def delete_s3_file(s3_url):
     """
     try:
         # S3 URL에서 버킷명과 파일 키 추출
-        bucket_name = "tokenus-storage"  # ✅ S3 버킷명
+        bucket_name = "tokenus.storage"  # ✅ S3 버킷명
         key = s3_url.replace(f"https://{bucket_name}.s3.ap-northeast-2.amazonaws.com/", "")
 
         # S3 객체 삭제

@@ -2,27 +2,27 @@ version: '3.8'
 
 services:
   tokenus-flask:
-    container_name: tokenus-flask
-    image: 343218215881.dkr.ecr.ap-northeast-2.amazonaws.com/tokenus/ml:latest
+    container_name: ${CONTAINER_NAME}
+    image: ${IMAGE_NAME}
     env_file: .env
     networks:
-      - network
+      - ${NETWORK_NAME}
     restart: always
     volumes:
-      - faiss_data:/app/faiss_index
+      - ${VOLUME_NAME}:/app/faiss_index
     expose:
-      - "5000"
-    cpus: "1.0"         # ✅ 일반 compose에서 적용 가능한 CPU 제한
-    mem_limit: 1g       # ✅ 메모리 제한 (1GB)
+      - "${FLASK_PORT}"
+    cpus: "${CPU_LIMIT}"
+    mem_limit: ${MEMORY_LIMIT}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${FLASK_PORT}/health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 networks:
-  network:
+  ${NETWORK_NAME}:
     external: true
 
 volumes:
-  faiss_data:
+  ${VOLUME_NAME}:

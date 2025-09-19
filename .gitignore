@@ -6,6 +6,7 @@ __pycache__/
 # 환경설정 및 가상환경 폴더 제외
 .env
 .venv/
+venv/
 Pipfile.lock
 
 # 동영상 및 프레임 폴더 제외 (Git 관리 대상 X)
