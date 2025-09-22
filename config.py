@@ -1,6 +1,34 @@
 import os
+from dotenv import load_dotenv
 
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = "ap-northeast-2"  # 서울 리전
-AWS_S3_BUCKET_NAME = "tokenus-storage"  # S3 버킷 이름
+# Load environment variables from a .env file
+load_dotenv(".env")
+
+class Config:
+
+    DEBUG = True
+
+    # AWS
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION = os.getenv("AWS_DEFAULT_REGION")
+    S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+
+    # MySQL
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
+    MYSQL_USER = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "")
+
+    # Spring Boot Server URL
+    SPRINGBOOT_URL = os.getenv("SPRINGBOOT_URL", "")
+    API_PATH = os.getenv("API_PATH", "")
+
+    # FAISS Storage Path
+    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "faiss_index/faiss_index.bin")
+
+    # Download Folder
+    DOWNLOAD_FOLDER = os.getenv("DOWNLOAD_FOLDER", "downloads")
+
+    FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
