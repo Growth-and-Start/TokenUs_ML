@@ -9,20 +9,47 @@ services:
       - tokenus-network
     restart: always
     volumes:
-      - faiss_data:/app/faiss_index   # ✅ 변수 대신 고정 이름
+      - faiss_data:/app/faiss_index
     expose:
       - "${FLASK_PORT}"
     cpus: "${CPU_LIMIT}"
     mem_limit: ${MEMORY_LIMIT}
+    depends_on:
+      tokenus-mysql-flask:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${FLASK_PORT}/health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  tokenus-mysql-flask:
+    container_name: tokenus-mysql-flask
+    image: mysql:8.0
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${FLASK_DB_NAME}
+      MYSQL_USER: ${FLASK_DB_USER}
+      MYSQL_PASSWORD: ${FLASK_DB_PASSWORD}
+    volumes:
+      - mysql_flask_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - tokenus-network
+    restart: always
+    command: [ "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci" ]
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 networks:
-  tokenus-network:          # ✅ 고정 이름
+  tokenus-network:
     external: true
 
 volumes:
-  faiss_data:   # ✅ 여기서는 반드시 고정 이름
+  faiss_data:
+  mysql_flask_data:
