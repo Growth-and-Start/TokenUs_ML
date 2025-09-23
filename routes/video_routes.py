@@ -15,7 +15,7 @@ def download_video():
     try:
         file_path = download_video_from_s3(video_url)
         similarity_result = perform_similarity_check(file_path, video_url)
-        notify_springboot(similarity_result)
+        notify_backend(similarity_result)
         return jsonify({"message": "Download & similarity check complete",
                         "result": similarity_result}), 200
     except Exception as e:
