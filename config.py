@@ -22,7 +22,7 @@ class Config:
     MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "")
 
     # Spring Boot Server URL
-    SPRINGBOOT_URL = os.getenv("SPRINGBOOT_URL", "")
+    BACKEND_URL = os.getenv("BACKEND_URL", "")
     API_PATH = os.getenv("API_PATH", "")
 
     # FAISS Storage Path
