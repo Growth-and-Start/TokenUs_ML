@@ -63,6 +63,21 @@ echo "멈춘 container 삭제"
 docker container prune -f
 
 # ==============================
+# DB Migration
+# ==============================
+echo "DB 마이그레이션 실행..."
+for i in {1..10}; do
+    if docker exec tokenus-mysql-flask mysql -u${FLASK_DB_USER} -p${FLASK_DB_PASSWORD} -e "SELECT 1;" >/dev/null 2>&1; then
+        echo "MySQL 컨테이너 준비 완료. 마이그레이션 실행..."
+        docker exec -i tokenus-mysql-flask mysql -uroot -p${MYSQL_ROOT_PASSWORD} flask_db < migrations/schema.sql
+        echo "DB 마이그레이션 완료!"
+        break
+    fi
+    echo "MySQL 준비 대기 중... ($i/10)"
+    sleep 10
+fi
+
+# ==============================
 # Health Check
 # ==============================
 for i in {1..10}; do

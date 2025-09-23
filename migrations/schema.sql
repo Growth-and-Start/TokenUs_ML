@@ -1,0 +1,10 @@
+CREATE DATABASE IF NOT EXISTS flask_db;
+
+USE flask_db;
+
+CREATE TABLE IF NOT EXISTS video_vectors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    video_url VARCHAR(255) NOT NULL,
+    faiss_index INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
