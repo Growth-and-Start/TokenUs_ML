@@ -1,12 +1,5 @@
-# 🪙TokenUs🪙
 
-## Team Info
-| Heejae An | Jimin Seo | Wonyoung Kim |
-| --- | --- | --- |
-| @AnyJae | @SeoJimin1234    | @lasagna10 |
-
-
-## Video Similarity Checker(TokenUs ML)
+# Video Similarity Checker(TokenUs ML)
 
 ### Overview
  This project provides a video similarity detection system based on deep learning and vectr search.
@@ -109,5 +102,11 @@ Content-Type: application/json
 ```
 
 ------
-###License
+### License
 MIT License © 2025 TokenUs Team
+
+
+### Team Info
+| Heejae An | Jimin Seo | Wonyoung Kim |
+| --- | --- | --- |
+| @AnyJae | @SeoJimin1234    | @lasagna10 |
