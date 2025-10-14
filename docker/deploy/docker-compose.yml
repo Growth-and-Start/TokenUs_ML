@@ -3,7 +3,7 @@ version: '3.8'
 services:
   tokenus-flask:
     container_name: tokenus-flask
-    image: 180141513124.dkr.ecr.ap-northeast-2.amazonaws.com/tokenus-flask:latest
+    image: ${IMAGE_NAME}
     env_file: .env
     networks:
       - tokenus-network

@@ -66,7 +66,7 @@ docker container prune -f
 # DB Migration
 # ==============================
 echo "DB migration in progress..."
-for i in {1..10}; do
+for i in $(seq 1 10); do
     if docker exec tokenus-mysql-flask mysql -u${FLASK_DB_USER} -p${FLASK_DB_PASSWORD} -e "SELECT 1;" >/dev/null 2>&1; then
         echo "MySQL container is ready. Starting migration..."
         docker exec -i tokenus-mysql-flask mysql -uroot -p${MYSQL_ROOT_PASSWORD} flask_db < migrations/schema.sql
@@ -75,19 +75,21 @@ for i in {1..10}; do
     fi
     echo "Waiting for MySQL to be ready... ($i/10)"
     sleep 10
-fi
+done
+
 
 # ==============================
 # Health Check
 # ==============================
-for i in {1..10}; do
+for i in $(seq 1 10); do
     if [ "$i" -eq 10 ]; then
-       echo "Health check failed"
-       docker compose down
-       exit 1
+      echo "Health check failed"
+      docker compose stop tokenus-flask
+      exit 1
     fi
 
-    if curl "http://localhost:$FLASK_PORT/health"; then
+
+    if curl -fs "http://localhost:$FLASK_PORT/health" > /dev/null; then
         echo "Flask container is running normally..."
         break
     fi
@@ -95,5 +97,6 @@ for i in {1..10}; do
     echo "Flask server health check in progress..."
     sleep 15
 done
+
 
 echo "All tasks are completed."
