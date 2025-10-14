@@ -1,4 +1,4 @@
-                                                                             migrations/schema.sql                                                                                         CREATE DATABASE IF NOT EXISTS flask_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+migrations/schema.sql                                                                                        
 USE flask_db;
 
 CREATE TABLE IF NOT EXISTS video_vectors (
