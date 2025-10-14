@@ -5,11 +5,12 @@ import torchvision.transforms as transforms
 from torchvision.models import resnet50, ResNet50_Weights
 from config import Config
 from extensions.s3 import get_s3_client
+import subprocess
+import numpy as np
+import tempfile
 
-# S3 클라이언트
 s3_client = get_s3_client()
 
-# 다운로드 폴더
 os.makedirs(Config.DOWNLOAD_FOLDER, exist_ok=True)
 
 def download_video_from_s3(s3_url):
@@ -27,21 +28,36 @@ def delete_s3_file(s3_url):
         print(f"S3 delete error: {e}")
 
 def extract_frames(video_path, interval=1):
-    """Extract frames from video at specified interval"""
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise ValueError("Error: Unable to open video file.")
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    frame_interval = fps * interval
-    frames, frame_count = [], 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_count % frame_interval == 0:
-            frames.append(frame)
-        frame_count += 1
-    cap.release()
+    """
+    Extract frames using ffmpeg at every `interval` seconds.
+    Returns: list of frames (as numpy arrays, in RGB)
+    """
+    tmp_dir = tempfile.mkdtemp()
+    output_pattern = os.path.join(tmp_dir, "frame_%06d.jpg")
+
+    cmd = [
+        "ffmpeg", "-i", video_path,
+        "-vf", f"fps=1/{interval}",
+        "-q:v", "2",
+        output_pattern,
+        "-hide_banner", "-loglevel", "error"
+    ]
+
+    subprocess.run(cmd, check=True)
+
+    frames = []
+    for file in sorted(os.listdir(tmp_dir)):
+        if file.endswith(".jpg"):
+            frame_path = os.path.join(tmp_dir, file)
+            frame = cv2.imread(frame_path)
+            if frame is not None:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frames.append(frame)
+
+    for file in os.listdir(tmp_dir):
+        os.remove(os.path.join(tmp_dir, file))
+    os.rmdir(tmp_dir)
+
     return frames
 
 # ResNet-50 Model Load

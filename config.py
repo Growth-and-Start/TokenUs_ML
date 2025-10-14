@@ -26,7 +26,7 @@ class Config:
     API_PATH = os.getenv("API_PATH", "")
 
     # FAISS Storage Path
-    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "faiss_index/faiss_index.bin")
+    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "faiss_index/faiss.index")
 
     # Download Folder
     DOWNLOAD_FOLDER = os.getenv("DOWNLOAD_FOLDER", "downloads")
