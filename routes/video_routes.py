@@ -1,14 +1,17 @@
 from flask import Blueprint, request, jsonify
 from services.video_service import download_video_from_s3
 from services.similarity import perform_similarity_check
-from services.notify import notify_springboot
+from services.notify import notify_backend
 
 video_bp = Blueprint("video", __name__)
 
 @video_bp.route("/download", methods=["POST"])
 def download_video():
-    data = request.json
+    data = request.get_json(force=True, silent=True) or {}
     video_url = data.get("file_url")
+
+    if not video_url or not isinstance(video_url, str):
+        return jsonify({"error": "file_url must be a string"}), 400
     if not video_url:
         return jsonify({"error": "No video_url provided"}), 400
 

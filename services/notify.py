@@ -3,12 +3,12 @@ from config import Config
 
 def notify_backend(similarity_result):
     payload = {
-        "max_similarity": similarity_result.get("max_similarity"),
-        "avg_similarity": similarity_result.get("avg_similarity"),
+        "max_segment_similarity": similarity_result.get("max_segment_similarity"),
         "message": similarity_result.get("message"),
         "passed": similarity_result.get("passed"),
         "similar_video_url": similarity_result.get("similar_video_url"),
         "video_url": similarity_result.get("video_url"),
+        "elapsed_time": similarity_result.get("elapsed_time")
     }
     headers = {"Content-Type": "application/json"}
     try:

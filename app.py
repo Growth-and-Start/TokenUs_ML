@@ -1,5 +1,6 @@
 from flask import Flask
 from config import Config
+import os
 
 # route blueprint import
 from routes.video_routes import video_bp
@@ -7,6 +8,9 @@ from routes.faiss_routes import faiss_bp
 from routes.test_routes import test_bp
 
 def create_app():
+
+    os.makedirs(os.path.dirname(Config.FAISS_INDEX_PATH), exist_ok=True)
+
     app = Flask(__name__)
     app.config.from_object(Config)
 

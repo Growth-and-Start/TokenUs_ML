@@ -3,8 +3,7 @@ name: Build and Push Flask Docker Image to ECR and Deploy on EC2
 on:
   push:
     branches:
-      - release  # release 브랜치에 push될 때 실행
-
+      - main
 jobs:
   build-and-push:
     runs-on: ubuntu-latest

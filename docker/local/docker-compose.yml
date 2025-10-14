@@ -1,31 +1,29 @@
-name: tokenus
+version: '3.8'
 
 services:
-  tokenus-flask:
-    container_name: tokenus-flask
-    build:
-      context: ../../           # Dockerfile이 있는 디렉토리
-      dockerfile: Dockerfile   # 생략 가능 (파일명이 Dockerfile이면)
-    platform: linux/amd64    # 여기서 플랫폼 설정
-    image: tokenus/ml:latest    # 빌드된 이미지 태그
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: "1G"
-    env_file: ../../.env
-    ports:
-      - "5001:5000"
+  tokenus-mysql-flask:
+    container_name: tokenus-mysql-flask
+    image: mysql:8.0
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-      - faiss_volume:/app/faiss_index
+      - mysql_flask_data:/var/lib/mysql
+    ports:
+      - "3308:3306"
     networks:
-      - tokenus_shared_network
+      - default
     restart: always
-
-networks:
-  tokenus_shared_network:
-    external: true
-
+    command: [ "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci" ]
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  faiss_volume:
+  faiss_data:
+  mysql_flask_data:
