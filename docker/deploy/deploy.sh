@@ -81,22 +81,22 @@ done
 # ==============================
 # Health Check
 # ==============================
-for i in $(seq 1 10); do
-    if [ "$i" -eq 10 ]; then
-      echo "Health check failed"
-      docker compose stop tokenus-flask
-      exit 1
-    fi
-
-
-    if curl -fs "http://localhost:$FLASK_PORT/health" > /dev/null; then
-        echo "Flask container is running normally..."
+for i in $(seq 1 15); do
+    if docker exec tokenus-flask curl -fs "http://localhost:$FLASK_PORT/health" > /dev/null; then
+        echo "✅ Flask container is running normally..."
         break
     fi
 
-    echo "Flask server health check in progress..."
+    if [ "$i" -eq 15 ]; then
+        echo "❌ Health check failed"
+        docker compose stop tokenus-flask
+        exit 1
+    fi
+
+    echo "⏳ Flask server health check in progress..."
     sleep 15
 done
+
 
 
 echo "All tasks are completed."
