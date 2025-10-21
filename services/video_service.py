@@ -14,6 +14,9 @@ s3_client = get_s3_client()
 os.makedirs(Config.DOWNLOAD_FOLDER, exist_ok=True)
 
 def download_video_from_s3(s3_url):
+    
+    print(f"Downloading video from S3 URL: {s3_url}")
+
     object_key = s3_url.split(".com/")[-1]
     filename = object_key.split("/")[-1]
     file_path = os.path.join(Config.DOWNLOAD_FOLDER, filename)

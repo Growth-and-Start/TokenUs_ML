@@ -13,7 +13,7 @@ services:
     volumes:
       - mysql_flask_data:/var/lib/mysql
     ports:
-      - "3308:3306"
+      - "3307:3306"
     networks:
       - default
     restart: always
