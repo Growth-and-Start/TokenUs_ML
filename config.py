@@ -15,7 +15,7 @@ class Config:
     S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
     # MySQL
-    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "tokenus-mysql-flask")
     MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3307))
     MYSQL_USER = os.getenv("FLASK_DB_USER", "root")
     MYSQL_PASSWORD = os.getenv("FLASK_DB_PASSWORD", "")
