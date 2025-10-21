@@ -8,6 +8,9 @@ from services.video_service import extract_frames, extract_features, delete_loca
 
 
 def perform_similarity_check(video_path, video_url):
+
+    print(f"Performing similarity check for video: {video_url}")
+
     start_time = time.time()
 
     faiss_index = load_faiss_index()
@@ -89,6 +92,9 @@ def perform_similarity_check(video_path, video_url):
 
 
 def insert_vector_metadata(video_url, start_idx, count):
+
+    print(f"Inserting vector metadata for video: {video_url}, starting at index: {start_idx}, count: {count}")
+
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
