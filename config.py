@@ -6,7 +6,7 @@ load_dotenv(".env")
 
 class Config:
 
-    DEBUG = True
+    DEBUG = False
 
     # AWS
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
